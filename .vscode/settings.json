@@ -1,0 +1,8 @@
+{
+    "python.analysis.extraPaths": [
+        "./features/utilities",
+        "./features/entertainment",
+        "./features/system",
+        "./features/communication"
+    ]
+}
