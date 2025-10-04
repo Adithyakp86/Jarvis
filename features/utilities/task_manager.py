@@ -218,4 +218,3 @@ def summary_text(period: str) -> str:
             return "You have no overdue tasks."
         return "Overdue tasks: " + "; ".join(format_task(t) for t in items[:10])
     return ""
-
