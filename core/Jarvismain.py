@@ -2,6 +2,7 @@
 import datetime
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -41,9 +42,14 @@ from features.utilities.FocusGraph import focus_graph
 from features.utilities.Location import My_Location
 from features.utilities.reminder import remindme
 from features.utilities.sendcall import send_call
-from features.utilities.task_manager import (add_task, list_tasks,
-                                             mark_completed, overdue_tasks,
-                                             set_priority, summary_text)
+from features.utilities.task_manager import (add_task, add_category, delete_task,
+                                             format_statistics, get_all_tasks,
+                                             get_categories, get_daily_task_summary,
+                                             get_task_help, get_task_statistics,
+                                             get_tasks_by_category, get_tasks_needing_reminders,
+                                             list_tasks, mark_completed, overdue_tasks,
+                                             search_tasks, set_priority, set_task_reminder,
+                                             summary_text)
 from features.utilities.Translator import translategl
 
 project_root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -690,18 +696,21 @@ if __name__ == "__main__":
                     remindme()
 
                 # Task management commands
-                elif "add task" in query or "add urgent task" in query:
+                elif ("add task" in query or "add urgent task" in query or 
+                      "create task" in query or "new task" in query):
                     spoken = query
                     clean = (
                         spoken.replace("jarvis", "")
                         .replace("add urgent task", "")
                         .replace("add task", "")
+                        .replace("create task", "")
+                        .replace("new task", "")
                         .strip()
                     )
                     pr = "high" if "add urgent task" in spoken else "normal"
                     # Try to split on common deadline prepositions
                     deadline_text = None
-                    for kw in [" by ", " before ", " at ", " on "]:
+                    for kw in [" by ", " before ", " at ", " on ", " due "]:
                         if kw in clean:
                             parts = clean.split(kw, 1)
                             description = parts[0].strip()
@@ -711,23 +720,33 @@ if __name__ == "__main__":
                         description = clean
                     if description:
                         t = add_task(description, deadline_text, pr)
-                        Speak(f"Task added: {t['title']}")
+                        deadline_info = f" due {deadline_text}" if deadline_text else ""
+                        Speak(f"Task added: {t['title']}{deadline_info}")
                     else:
                         Speak("Please say the task description again.")
 
-                elif "what are my tasks today" in query:
+                elif ("what are my tasks today" in query or "today's tasks" in query or 
+                      "show today's tasks" in query or "tasks for today" in query):
                     Speak(summary_text("today"))
 
-                elif "what are my tasks this week" in query:
+                elif ("what are my tasks this week" in query or "this week's tasks" in query or 
+                      "show this week's tasks" in query or "tasks this week" in query):
                     Speak(summary_text("week"))
 
-                elif "show overdue tasks" in query or "overdue tasks" in query:
+                elif ("show overdue tasks" in query or "overdue tasks" in query or 
+                      "what tasks are overdue" in query or "overdue" in query):
                     Speak(summary_text("overdue"))
 
-                elif "mark task completed" in query:
+                elif ("mark task completed" in query or "complete task" in query or 
+                      "task completed" in query or "done with task" in query or 
+                      "finish task" in query):
                     title = (
                         query.replace("jarvis", "")
                         .replace("mark task completed", "")
+                        .replace("complete task", "")
+                        .replace("task completed", "")
+                        .replace("done with task", "")
+                        .replace("finish task", "")
                         .replace(":", "")
                         .strip()
                     )
@@ -756,6 +775,124 @@ if __name__ == "__main__":
                             Speak("I could not find that task.")
                     else:
                         Speak("Please specify the task and the priority.")
+
+                elif "delete task" in query:
+                    title = (
+                        query.replace("jarvis", "")
+                        .replace("delete task", "")
+                        .replace(":", "")
+                        .strip()
+                    )
+                    deleted = delete_task(title)
+                    if deleted:
+                        Speak(f"Deleted task: {deleted['title']}")
+                    else:
+                        Speak("I could not find that task.")
+
+                elif "search tasks" in query or "find task" in query:
+                    search_term = (
+                        query.replace("jarvis", "")
+                        .replace("search tasks", "")
+                        .replace("find task", "")
+                        .replace(":", "")
+                        .strip()
+                    )
+                    results = search_tasks(search_term)
+                    if results:
+                        Speak(f"Found {len(results)} tasks: " + "; ".join(format_task(t) for t in results[:5]))
+                    else:
+                        Speak("No tasks found matching that search.")
+
+                elif "list all tasks" in query or "show all tasks" in query:
+                    Speak(summary_text("all"))
+
+                elif "task statistics" in query or "task stats" in query:
+                    stats = get_task_statistics()
+                    Speak(format_statistics(stats))
+
+                elif "add task category" in query:
+                    # Example: add task category: Buy groceries to shopping
+                    clean = (
+                        query.replace("jarvis", "")
+                        .replace("add task category", "")
+                        .replace(":", "")
+                        .strip()
+                    )
+                    if " to " in clean:
+                        title, category = clean.split(" to ", 1)
+                        updated = add_category(title.strip(), category.strip())
+                        if updated:
+                            Speak(f"Added category '{category.strip()}' to task: {updated['title']}")
+                        else:
+                            Speak("I could not find that task.")
+                    else:
+                        Speak("Please specify the task and the category.")
+
+                elif "tasks by category" in query or "show tasks by category" in query:
+                    category = (
+                        query.replace("jarvis", "")
+                        .replace("tasks by category", "")
+                        .replace("show tasks by category", "")
+                        .replace(":", "")
+                        .strip()
+                    )
+                    tasks = get_tasks_by_category(category)
+                    if tasks:
+                        Speak(f"Tasks in category '{category}': " + "; ".join(format_task(t) for t in tasks[:5]))
+                    else:
+                        Speak(f"No tasks found in category '{category}'.")
+
+                elif "list categories" in query or "show categories" in query:
+                    categories = get_categories()
+                    if categories:
+                        Speak(f"Available categories: {', '.join(categories)}")
+                    else:
+                        Speak("No categories found.")
+
+                elif ("daily summary" in query or "task summary" in query or 
+                      "my task summary" in query or "summary" in query):
+                    summary = get_daily_task_summary()
+                    Speak(summary)
+
+                elif "set task reminder" in query:
+                    # Example: set task reminder: Call mom in 30 minutes
+                    clean = (
+                        query.replace("jarvis", "")
+                        .replace("set task reminder", "")
+                        .replace(":", "")
+                        .strip()
+                    )
+                    if " in " in clean:
+                        title, time_part = clean.split(" in ", 1)
+                        # Extract minutes from time part
+                        minutes = 30  # default
+                        time_match = re.search(r"(\d+)", time_part)
+                        if time_match:
+                            minutes = int(time_match.group(1))
+                        updated = set_task_reminder(title.strip(), minutes)
+                        if updated:
+                            Speak(f"Reminder set for {minutes} minutes before deadline for: {updated['title']}")
+                        else:
+                            Speak("I could not find that task.")
+                    else:
+                        Speak("Please specify the task and reminder time.")
+
+                elif ("what tasks need reminders" in query or 
+                      "tasks needing reminders" in query or "reminder tasks" in query):
+                    tasks = get_tasks_needing_reminders()
+                    if tasks:
+                        Speak(f"Tasks needing reminders: " + "; ".join(t["title"] for t in tasks[:5]))
+                    else:
+                        Speak("No tasks currently need reminders.")
+
+                elif ("task help" in query or "help with tasks" in query or 
+                      "task management help" in query or "how to use tasks" in query):
+                    help_text = get_task_help()
+                    # Split help text into smaller chunks for better speech output
+                    help_lines = help_text.split('\n')
+                    for line in help_lines:
+                        if line.strip():
+                            Speak(line.strip())
 
                 # ^ Web ip address finding
                 elif "ip ad dress" in query:
