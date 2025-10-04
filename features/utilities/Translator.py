@@ -8,7 +8,12 @@ import pyttsx3
 import speech_recognition
 from googletrans import Translator
 from gtts import gTTS
-from playsound import playsound
+try:
+    from playsound import playsound
+    PLAYSOUND_AVAILABLE = True
+except ImportError:
+    PLAYSOUND_AVAILABLE = False
+    print("Warning: playsound not available, audio playback will be skipped")
 
 engine = pyttsx3.init("sapi5")
 voices = engine.getProperty("voices")
@@ -54,9 +59,14 @@ def translategl(query):
     try:
         speakgl = gTTS(text=text, lang=b, slow=False)
         speakgl.save("voice.mp3")
-        playsound("VOICE.mp3")
-
-        time.sleep(5)
+        
+        if PLAYSOUND_AVAILABLE:
+            playsound("voice.mp3")
+            time.sleep(5)
+        else:
+            print("Audio playback skipped (playsound not available)")
+            time.sleep(2)
+        
         os.remove("voice.mp3")
-    except:
-        print("Unable to translate")
+    except Exception as e:
+        print(f"Unable to translate: {e}")

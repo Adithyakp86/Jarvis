@@ -35,7 +35,7 @@ libraries = [
     "twilio",
     "smtplib",
     "fnmatch",
-    "playsound",
+    # "playsound",  # Optional - causes CI issues
     "mouse",
 ]
 
